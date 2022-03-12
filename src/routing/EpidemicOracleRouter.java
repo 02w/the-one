@@ -4,180 +4,182 @@
  */
 package routing;
 
+import static core.Constants.DEBUG;
+
+import core.Connection;
+import core.DTNHost;
+import core.DTNSim;
+import core.Message;
+import core.Settings;
+import core.SimError;
 import java.util.ArrayList;
 import java.util.List;
 
-import core.*;
-
-import static core.Constants.DEBUG;
-
 /**
- * <P>
- * Epidemic message router with an oracle that tells when a message is delivered
- * and that message is then removed from all nodes that use this routing module.
- * This router also <B>ignores message size and all messages are delivered
- * immediately</B>.</P><P>
- * <B>Note:</B> This router module also bypasses ActiveRouter.update()
+ * Epidemic message router with an oracle that tells when a message is delivered and that message is
+ * then removed from all nodes that use this routing module. This router also <B>ignores message
+ * size and all messages are delivered immediately</B>.
+ *
+ * <p><B>Note:</B> This router module also bypasses ActiveRouter.update()
  */
 public class EpidemicOracleRouter extends ActiveRouter {
 
-	/** List of all routers in this node group */
-	private static List<EpidemicOracleRouter> allRouters;
+  /** List of all routers in this node group */
+  private static List<EpidemicOracleRouter> allRouters;
 
-	static {
-		DTNSim.registerForReset(EpidemicOracleRouter.class.getCanonicalName());
-		reset();
-	}
+  static {
+    DTNSim.registerForReset(EpidemicOracleRouter.class.getCanonicalName());
+    EpidemicOracleRouter.reset();
+  }
 
-	/**
-	 * Constructor. Creates a new message router based on the settings in
-	 * the given Settings object.
-	 * @param s The settings object
-	 */
-	public EpidemicOracleRouter(Settings s) {
-		super(s);
-	}
+  /**
+   * Constructor. Creates a new message router based on the settings in the given Settings object.
+   *
+   * @param s The settings object
+   */
+  public EpidemicOracleRouter(Settings s) {
+    super(s);
+  }
 
-	/**
-	 * Copy constructor.
-	 * @param r The router prototype where setting values are copied from
-	 */
-	protected EpidemicOracleRouter(EpidemicOracleRouter r) {
-		super(r);
-		allRouters.add(this);
-	}
+  /**
+   * Copy constructor.
+   *
+   * @param r The router prototype where setting values are copied from
+   */
+  protected EpidemicOracleRouter(EpidemicOracleRouter r) {
+    super(r);
+    EpidemicOracleRouter.allRouters.add(this);
+  }
 
-	@Override
-	public void changedConnection(Connection con) {
-		super.changedConnection(con);
+  /** Resets the static router list */
+  public static void reset() {
+    EpidemicOracleRouter.allRouters = new ArrayList<>();
+  }
 
-		if (con.isUp()) {
-			DTNHost peer = con.getOtherNode(getHost());
-			List<Message> newMessages = new ArrayList<Message>();
+  @Override
+  public void changedConnection(Connection con) {
+    super.changedConnection(con);
 
-			for (Message m : peer.getMessageCollection()) {
-				if (!this.hasMessage(m.getId())) {
-					newMessages.add(m);
-				}
-			}
-			for (Message m : newMessages) {
-				/* try to start transfer from peer */
-				if (con.startTransfer(peer, m) == RCV_OK) {
-					con.finalizeTransfer(); /* and finalize it right away */
-				}
-			}
-		}
-	}
+    if (con.isUp()) {
+      DTNHost peer = con.getOtherNode(this.getHost());
+      List<Message> newMessages = new ArrayList<>();
 
-	private void sendMessageToConnected(Message m) {
-		DTNHost host = getHost();
+      for (Message m : peer.getMessageCollection()) {
+        if (!this.hasMessage(m.getId())) {
+          newMessages.add(m);
+        }
+      }
+      for (Message m : newMessages) {
+        /* try to start transfer from peer */
+        if (con.startTransfer(peer, m) == MessageRouter.RCV_OK) {
+          con.finalizeTransfer(); /* and finalize it right away */
+        }
+      }
+    }
+  }
 
-		for (Connection c : getConnections()) {
-			if (c.isReadyForTransfer() && c.startTransfer(host, m) == RCV_OK) {
-				c.finalizeTransfer(); /* and finalize it right away */
-			}
-		}
-	}
+  private void sendMessageToConnected(Message m) {
+    DTNHost host = this.getHost();
 
-	public boolean createNewMessage(Message m) {
-		boolean ok = super.createNewMessage(m);
+    for (Connection c : this.getConnections()) {
+      if (c.isReadyForTransfer() && c.startTransfer(host, m) == MessageRouter.RCV_OK) {
+        c.finalizeTransfer(); /* and finalize it right away */
+      }
+    }
+  }
 
-		if (!ok) {
-			throw new SimError("Can't create message " + m);
-		}
+  @Override
+  public boolean createNewMessage(Message m) {
+    boolean ok = super.createNewMessage(m);
 
-		sendMessageToConnected(m);
+    if (!ok) {
+      throw new SimError("Can't create message " + m);
+    }
 
-		return true;
-	}
+    this.sendMessageToConnected(m);
 
-	/**
-	 * Removes the message with the given ID from this router, if the router
-	 * has that message; otherwise does nothing. If the router was transferring
-	 * the message, the transfer is aborted.
-	 * @param id ID of the message to be removed
-	 */
-	public void removeDeliveredMessage(String id) {
-		if (this.hasMessage(id)) {
-			for (Connection c : this.sendingConnections) {
-				/* if sending the message-to-be-removed, cancel transfer */
-				if (c.getMessage().getId().equals(id)) {
-					c.abortTransfer();
-				}
-			}
-			this.deleteMessage(id, false);
-		}
-	}
+    return true;
+  }
 
-	@Override
-	public Message messageTransferred(String id, DTNHost from) {
-		Message m = super.messageTransferred(id, from);
+  /**
+   * Removes the message with the given ID from this router, if the router has that message;
+   * otherwise does nothing. If the router was transferring the message, the transfer is aborted.
+   *
+   * @param id ID of the message to be removed
+   */
+  public void removeDeliveredMessage(String id) {
+    if (this.hasMessage(id)) {
+      for (Connection c : this.sendingConnections) {
+        /* if sending the message-to-be-removed, cancel transfer */
+        if (c.getMessage().getId().equals(id)) {
+          c.abortTransfer();
+        }
+      }
+      this.deleteMessage(id, false);
+    }
+  }
 
-		if (m.getTo() == this.getHost()) {
-			for (EpidemicOracleRouter r : allRouters) {
-				if (r != this && r != from.getRouter()) {
-					r.removeDeliveredMessage(id);
-				}
-			}
-		} else {
-			sendMessageToConnected(m);
-		}
+  @Override
+  public Message messageTransferred(String id, DTNHost from) {
+    Message m = super.messageTransferred(id, from);
 
-		return m;
-	}
+    if (m.getTo() == this.getHost()) {
+      for (EpidemicOracleRouter r : EpidemicOracleRouter.allRouters) {
+        if (r != this && r != from.getRouter()) {
+          r.removeDeliveredMessage(id);
+        }
+      }
+    } else {
+      this.sendMessageToConnected(m);
+    }
 
-	protected int checkReceiving(Message m) {
-		if ( isIncomingMessage(m.getId()) || hasMessage(m.getId()) ||
-				isDeliveredMessage(m) ){
-			return DENIED_OLD; // already seen this message -> reject it
-		}
+    return m;
+  }
 
-		if (m.getTtl() <= 0 && m.getTo() != getHost()) {
-			/* TTL has expired and this host is not the final recipient */
-			return DENIED_TTL;
-		}
+  protected int checkReceiving(Message m) {
+    if (this.isIncomingMessage(m.getId()) || this.hasMessage(m.getId()) || this.isDeliveredMessage(m)) {
+      return MessageRouter.DENIED_OLD; // already seen this message -> reject it
+    }
 
-		/* remove oldest messages but not the ones being sent */
-		if (!makeRoomForMessage(m.getSize())) {
-			return DENIED_NO_SPACE; // couldn't fit into buffer -> reject
-		}
+    if (m.getTtl() <= 0 && m.getTo() != this.getHost()) {
+      /* TTL has expired and this host is not the final recipient */
+      return MessageRouter.DENIED_TTL;
+    }
 
-		return RCV_OK;
-	}
+    /* remove oldest messages but not the ones being sent */
+    if (!this.makeRoomForMessage(m.getSize())) {
+      return MessageRouter.DENIED_NO_SPACE; // couldn't fit into buffer -> reject
+    }
 
-	@Override
-	protected void transferDone(Connection con) {
-		Message m = con.getMessage();
+    return MessageRouter.RCV_OK;
+  }
 
-		if (m == null) {
-			if (DEBUG) core.Debug.p("Null message for con " + con);
-			return;
-		}
+  @Override
+  protected void transferDone(Connection con) {
+    Message m = con.getMessage();
 
-		/* was the message delivered to the final recipient? */
-		if (m.getTo() == con.getOtherNode(getHost())) {
-			this.deleteMessage(m.getId(), false);
-		}
-	}
+    if (m == null) {
+      if (DEBUG) {
+        core.Debug.p("Null message for con " + con);
+      }
+      return;
+    }
 
-	@Override
-	public void update() {
-		/* nothing to do; all transfers are started only when new connections
-		   are created or new messages are created or received, and transfers
-		   are finalized immediately */
-	}
+    /* was the message delivered to the final recipient? */
+    if (m.getTo() == con.getOtherNode(this.getHost())) {
+      this.deleteMessage(m.getId(), false);
+    }
+  }
 
+  @Override
+  public void update() {
+    /* nothing to do; all transfers are started only when new connections
+    are created or new messages are created or received, and transfers
+    are finalized immediately */
+  }
 
-	@Override
-	public EpidemicOracleRouter replicate() {
-		return new EpidemicOracleRouter(this);
-	}
-
-	/**
-	 * Resets the static router list
-	 */
-	public static void reset() {
-		allRouters = new ArrayList<EpidemicOracleRouter>();
-	}
-
+  @Override
+  public EpidemicOracleRouter replicate() {
+    return new EpidemicOracleRouter(this);
+  }
 }

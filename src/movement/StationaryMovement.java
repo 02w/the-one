@@ -8,63 +8,68 @@ import core.Coord;
 import core.Settings;
 
 /**
- * A dummy stationary "movement" model where nodes do not move.
- * Might be useful for simulations with only external connection events.
+ * A dummy stationary "movement" model where nodes do not move. Might be useful for simulations with
+ * only external connection events.
  */
 public class StationaryMovement extends MovementModel {
-	/** Per node group setting for setting the location ({@value}) */
-	public static final String LOCATION_S = "nodeLocation";
-	private Coord loc; /** The location of the nodes */
+  /** Per node group setting for setting the location ({@value}) */
+  public static final String LOCATION_S = "nodeLocation";
 
-	/**
-	 * Creates a new movement model based on a Settings object's settings.
-	 * @param s The Settings object where the settings are read from
-	 */
-	public StationaryMovement(Settings s) {
-		super(s);
-		int coords[];
+  private final Coord loc;
+  /** The location of the nodes */
 
-		coords = s.getCsvInts(LOCATION_S, 2);
-		this.loc = new Coord(coords[0],coords[1]);
-	}
+  /**
+   * Creates a new movement model based on a Settings object's settings.
+   *
+   * @param s The Settings object where the settings are read from
+   */
+  public StationaryMovement(Settings s) {
+    super(s);
+    int[] coords;
 
-	/**
-	 * Copy constructor.
-	 * @param sm The StationaryMovement prototype
-	 */
-	public StationaryMovement(StationaryMovement sm) {
-		super(sm);
-		this.loc = sm.loc;
-	}
+    coords = s.getCsvInts(StationaryMovement.LOCATION_S, 2);
+    this.loc = new Coord(coords[0], coords[1]);
+  }
 
-	/**
-	 * Returns the only location of this movement model
-	 * @return the only location of this movement model
-	 */
-	@Override
-	public Coord getInitialLocation() {
-		return loc;
-	}
+  /**
+   * Copy constructor.
+   *
+   * @param sm The StationaryMovement prototype
+   */
+  public StationaryMovement(StationaryMovement sm) {
+    super(sm);
+    this.loc = sm.loc;
+  }
 
-	/**
-	 * Returns a single coordinate path (using the only possible coordinate)
-	 * @return a single coordinate path
-	 */
-	@Override
-	public Path getPath() {
-		Path p = new Path(0);
-		p.addWaypoint(loc);
-		return p;
-	}
+  /**
+   * Returns the only location of this movement model
+   *
+   * @return the only location of this movement model
+   */
+  @Override
+  public Coord getInitialLocation() {
+    return this.loc;
+  }
 
-	@Override
-	public double nextPathAvailable() {
-		return Double.MAX_VALUE;	// no new paths available
-	}
+  /**
+   * Returns a single coordinate path (using the only possible coordinate)
+   *
+   * @return a single coordinate path
+   */
+  @Override
+  public Path getPath() {
+    Path p = new Path(0);
+    p.addWaypoint(this.loc);
+    return p;
+  }
 
-	@Override
-	public StationaryMovement replicate() {
-		return new StationaryMovement(this);
-	}
+  @Override
+  public double nextPathAvailable() {
+    return Double.MAX_VALUE; // no new paths available
+  }
 
+  @Override
+  public StationaryMovement replicate() {
+    return new StationaryMovement(this);
+  }
 }

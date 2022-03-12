@@ -7,59 +7,58 @@ package movement;
 import core.Coord;
 import core.Settings;
 
-/**
- * Random waypoint movement model. Creates zig-zag paths within the
- * simulation area.
- */
+/** Random waypoint movement model. Creates zig-zag paths within the simulation area. */
 public class RandomWaypoint extends MovementModel {
-	/** how many waypoints should there be per path */
-	private static final int PATH_LENGTH = 1;
-	private Coord lastWaypoint;
+  /** how many waypoints should there be per path */
+  private static final int PATH_LENGTH = 1;
 
-	public RandomWaypoint(Settings settings) {
-		super(settings);
-	}
+  private Coord lastWaypoint;
 
-	protected RandomWaypoint(RandomWaypoint rwp) {
-		super(rwp);
-	}
+  public RandomWaypoint(Settings settings) {
+    super(settings);
+  }
 
-	/**
-	 * Returns a possible (random) placement for a host
-	 * @return Random position on the map
-	 */
-	@Override
-	public Coord getInitialLocation() {
-		assert rng != null : "MovementModel not initialized!";
-		Coord c = randomCoord();
+  protected RandomWaypoint(RandomWaypoint rwp) {
+    super(rwp);
+  }
 
-		this.lastWaypoint = c;
-		return c;
-	}
+  /**
+   * Returns a possible (random) placement for a host
+   *
+   * @return Random position on the map
+   */
+  @Override
+  public Coord getInitialLocation() {
+    assert MovementModel.rng != null : "MovementModel not initialized!";
+    Coord c = this.randomCoord();
 
-	@Override
-	public Path getPath() {
-		Path p;
-		p = new Path(generateSpeed());
-		p.addWaypoint(lastWaypoint.clone());
-		Coord c = lastWaypoint;
+    this.lastWaypoint = c;
+    return c;
+  }
 
-		for (int i=0; i<PATH_LENGTH; i++) {
-			c = randomCoord();
-			p.addWaypoint(c);
-		}
+  @Override
+  public Path getPath() {
+    Path p;
+    p = new Path(this.generateSpeed());
+    p.addWaypoint(this.lastWaypoint.clone());
+    Coord c = this.lastWaypoint;
 
-		this.lastWaypoint = c;
-		return p;
-	}
+    for (int i = 0; i < RandomWaypoint.PATH_LENGTH; i++) {
+      c = this.randomCoord();
+      p.addWaypoint(c);
+    }
 
-	@Override
-	public RandomWaypoint replicate() {
-		return new RandomWaypoint(this);
-	}
+    this.lastWaypoint = c;
+    return p;
+  }
 
-	protected Coord randomCoord() {
-		return new Coord(rng.nextDouble() * getMaxX(),
-				rng.nextDouble() * getMaxY());
-	}
+  @Override
+  public RandomWaypoint replicate() {
+    return new RandomWaypoint(this);
+  }
+
+  protected Coord randomCoord() {
+    return new Coord(MovementModel.rng.nextDouble() * this.getMaxX(),
+        MovementModel.rng.nextDouble() * this.getMaxY());
+  }
 }

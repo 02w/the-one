@@ -4,221 +4,216 @@
  */
 package input;
 
+import core.Coord;
+import core.SettingsError;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
-
 import util.Tuple;
-
-import core.Coord;
-import core.SettingsError;
-
 
 /**
  * Reader for ExternalMovement movement model's time-location tuples.
- * <P>
- * First line of the file should be the offset header. Syntax of the header
- * should be:<BR>
- * <CODE>minTime maxTime minX maxX minY maxY minZ maxZ</CODE>
- * <BR>
- * Last two values (Z-axis) are ignored at the moment but can be present
- * in the file.
- * <P>
- * Following lines' syntax should be:<BR>
- * <CODE>time id xPos yPos</CODE><BR>
- * where <CODE>time</CODE> is the time when a node with <CODE>id</CODE> should
- * be at location <CODE>(xPos, yPos)</CODE>.
- * </P>
- * <P>
- * All lines must be sorted by time. Sampling interval (time difference between
- * two time instances) must be same for the whole file.
- * </P>
+ *
+ * <p>First line of the file should be the offset header. Syntax of the header should be:<br>
+ * <CODE>minTime maxTime minX maxX minY maxY minZ maxZ</CODE> <br>
+ * Last two values (Z-axis) are ignored at the moment but can be present in the file.
+ *
+ * <p>Following lines' syntax should be:<br>
+ * <CODE>time id xPos yPos</CODE><br>
+ * where <CODE>time</CODE> is the time when a node with <CODE>id</CODE> should be at location <CODE>
+ * (xPos, yPos)</CODE>.
+ *
+ * <p>All lines must be sorted by time. Sampling interval (time difference between two time
+ * instances) must be same for the whole file.
  */
 public class ExternalMovementReader {
-	/* Prefix for comment lines (lines starting with this are ignored) */
-	public static final String COMMENT_PREFIX = "#";
-	private Scanner scanner;
-	private double lastTimeStamp = -1;
-	private String lastLine;
-	private double minTime;
-	private double maxTime;
-	private double minX;
-	private double maxX;
-	private double minY;
-	private double maxY;
-	private boolean normalize;
+  /* Prefix for comment lines (lines starting with this are ignored) */
+  public static final String COMMENT_PREFIX = "#";
+  private final Scanner scanner;
+  private double lastTimeStamp = -1;
+  private String lastLine;
+  private final double minTime;
+  private final double maxTime;
+  private final double minX;
+  private final double maxX;
+  private final double minY;
+  private final double maxY;
+  private boolean normalize;
 
+  /**
+   * Constructor. Creates a new reader that reads the data from a file.
+   *
+   * @param inFilePath Path to the file where the data is read
+   * @throws SettingsError if the file wasn't found
+   */
+  public ExternalMovementReader(String inFilePath) {
+    this.normalize = true;
+    File inFile = new File(inFilePath);
+    try {
+      this.scanner = new Scanner(inFile);
+    } catch (FileNotFoundException e) {
+      throw new SettingsError("Couldn't find external movement input " + "file " + inFile);
+    }
 
-	/**
-	 * Constructor. Creates a new reader that reads the data from a file.
-	 * @param inFilePath Path to the file where the data is read
-	 * @throws SettingsError if the file wasn't found
-	 */
-	public ExternalMovementReader(String inFilePath) {
-		this.normalize = true;
-		File inFile = new File(inFilePath);
-		try {
-			scanner = new Scanner(inFile);
-		} catch (FileNotFoundException e) {
-			throw new SettingsError("Couldn't find external movement input " +
-					"file " + inFile);
-		}
+    String offsets = this.scanner.nextLine();
+    Scanner lineScan = null;
 
-		String offsets = scanner.nextLine();
-		Scanner lineScan = null;
+    try {
+      lineScan = new Scanner(offsets);
+      this.minTime = lineScan.nextDouble();
+      this.maxTime = lineScan.nextDouble();
+      this.minX = lineScan.nextDouble();
+      this.maxX = lineScan.nextDouble();
+      this.minY = lineScan.nextDouble();
+      this.maxY = lineScan.nextDouble();
+    } catch (Exception e) {
+      throw new SettingsError("Invalid offset line '" + offsets + "'");
+    } finally {
+      if (lineScan != null) {
+        lineScan.close();
+      }
+    }
 
-		try {
-			lineScan = new Scanner(offsets);
-			minTime = lineScan.nextDouble();
-			maxTime = lineScan.nextDouble();
-			minX = lineScan.nextDouble();
-			maxX = lineScan.nextDouble();
-			minY = lineScan.nextDouble();
-			maxY = lineScan.nextDouble();
-		} catch (Exception e) {
-			throw new SettingsError("Invalid offset line '" + offsets + "'");
-		}
-		finally {
-			if (lineScan != null) {
-				lineScan.close();
-			}
-		}
+    this.lastLine = this.scanner.nextLine();
+  }
 
-		lastLine = scanner.nextLine();
-	}
+  /**
+   * Sets normalizing of read values on/off. If on, values returned by {@link #readNextMovements()}
+   * are decremented by minimum values of the offsets. Default is on (normalize).
+   *
+   * @param normalize If true, normalizing is on (false -> off).
+   */
+  public void setNormalize(boolean normalize) {
+    this.normalize = normalize;
+  }
 
-	/**
-	 * Sets normalizing of read values on/off. If on, values returned by
-	 * {@link #readNextMovements()} are decremented by minimum values of the
-	 * offsets. Default is on (normalize).
-	 * @param normalize If true, normalizing is on (false -> off).
-	 */
-	public void setNormalize(boolean normalize) {
-		this.normalize = normalize;
-	}
+  /**
+   * Reads all new id-coordinate tuples that belong to the same time instance
+   *
+   * @return A list of tuples or empty list if there were no more moves
+   * @throws SettingsError if an invalid line was read
+   */
+  public List<Tuple<String, Coord>> readNextMovements() {
+    ArrayList<Tuple<String, Coord>> moves = new ArrayList<>();
 
-	/**
-	 * Reads all new id-coordinate tuples that belong to the same time instance
-	 * @return A list of tuples or empty list if there were no more moves
-	 * @throws SettingError if an invalid line was read
-	 */
-	public List<Tuple<String, Coord>> readNextMovements() {
-		ArrayList<Tuple<String, Coord>> moves =
-			new ArrayList<Tuple<String, Coord>>();
+    if (!this.scanner.hasNextLine()) {
+      return moves;
+    }
 
-		if (!scanner.hasNextLine()) {
-			return moves;
-		}
+    Scanner lineScan = new Scanner(this.lastLine);
+    double time = lineScan.nextDouble();
+    String id = lineScan.next();
+    double x = lineScan.nextDouble();
+    double y = lineScan.nextDouble();
 
-		Scanner lineScan = new Scanner(lastLine);
-		double time = lineScan.nextDouble();
-		String id = lineScan.next();
-		double x = lineScan.nextDouble();
-		double y = lineScan.nextDouble();
+    if (this.normalize) {
+      time -= this.minTime;
+      x -= this.minX;
+      y -= this.minY;
+    }
 
-		if (normalize) {
-			time -= minTime;
-			x -= minX;
-			y -= minY;
-		}
+    this.lastTimeStamp = time;
 
-		lastTimeStamp = time;
+    while (this.scanner.hasNextLine() && this.lastTimeStamp == time) {
+      this.lastLine = this.scanner.nextLine();
 
-		while (scanner.hasNextLine() && lastTimeStamp == time) {
-			lastLine = scanner.nextLine();
+      if (this.lastLine.trim().length() == 0 || this.lastLine.startsWith(
+          ExternalMovementReader.COMMENT_PREFIX)) {
+        continue; /* skip empty and comment lines */
+      }
 
-			if (lastLine.trim().length() == 0 ||
-					lastLine.startsWith(COMMENT_PREFIX)) {
-				continue; /* skip empty and comment lines */
-			}
+      // add previous line's tuple
+      moves.add(new Tuple<>(id, new Coord(x, y)));
 
-			// add previous line's tuple
-			moves.add(new Tuple<String, Coord>(id, new Coord(x,y)));
+      lineScan = new Scanner(this.lastLine);
 
-			lineScan = new Scanner(lastLine);
+      try {
+        time = lineScan.nextDouble();
+        id = lineScan.next();
+        x = lineScan.nextDouble();
+        y = lineScan.nextDouble();
+      } catch (Exception e) {
+        throw new SettingsError("Invalid line '" + this.lastLine + "'");
+      } finally {
+        lineScan.close();
+      }
 
-			try {
-				time = lineScan.nextDouble();
-				id = lineScan.next();
-				x = lineScan.nextDouble();
-				y = lineScan.nextDouble();
-			} catch (Exception e) {
-				throw new SettingsError("Invalid line '" + lastLine + "'");
-			} finally {
-				lineScan.close();
-			}
+      if (this.normalize) {
+        time -= this.minTime;
+        x -= this.minX;
+        y -= this.minY;
+      }
+    }
 
-			if (normalize) {
-				time -= minTime;
-				x -= minX;
-				y -= minY;
-			}
-		}
+    if (!this.scanner.hasNextLine()) { // add the last tuple of the file
+      moves.add(new Tuple<>(id, new Coord(x, y)));
+    }
 
-		if (!scanner.hasNextLine()) {	// add the last tuple of the file
-			moves.add(new Tuple<String, Coord>(id, new Coord(x,y)));
-		}
+    return moves;
+  }
 
-		return moves;
-	}
+  /**
+   * Returns the time stamp where the last moves read with {@link #readNextMovements()} belong to.
+   *
+   * @return The time stamp
+   */
+  public double getLastTimeStamp() {
+    return this.lastTimeStamp;
+  }
 
-	/**
-	 * Returns the time stamp where the last moves read with
-	 * {@link #readNextMovements()} belong to.
-	 * @return The time stamp
-	 */
-	public double getLastTimeStamp() {
-		return lastTimeStamp;
-	}
+  /**
+   * Returns offset maxTime
+   *
+   * @return the maxTime
+   */
+  public double getMaxTime() {
+    return this.maxTime;
+  }
 
-	/**
-	 * Returns offset maxTime
-	 * @return the maxTime
-	 */
-	public double getMaxTime() {
-		return maxTime;
-	}
+  /**
+   * Returns offset maxX
+   *
+   * @return the maxX
+   */
+  public double getMaxX() {
+    return this.maxX;
+  }
 
-	/**
-	 * Returns offset maxX
-	 * @return the maxX
-	 */
-	public double getMaxX() {
-		return maxX;
-	}
+  /**
+   * Returns offset maxY
+   *
+   * @return the maxY
+   */
+  public double getMaxY() {
+    return this.maxY;
+  }
 
-	/**
-	 * Returns offset maxY
-	 * @return the maxY
-	 */
-	public double getMaxY() {
-		return maxY;
-	}
+  /**
+   * Returns offset minTime
+   *
+   * @return the minTime
+   */
+  public double getMinTime() {
+    return this.minTime;
+  }
 
-	/**
-	 * Returns offset minTime
-	 * @return the minTime
-	 */
-	public double getMinTime() {
-		return minTime;
-	}
+  /**
+   * Returns offset minX
+   *
+   * @return the minX
+   */
+  public double getMinX() {
+    return this.minX;
+  }
 
-	/**
-	 * Returns offset minX
-	 * @return the minX
-	 */
-	public double getMinX() {
-		return minX;
-	}
-
-	/**
-	 * Returns offset minY
-	 * @return the minY
-	 */
-	public double getMinY() {
-		return minY;
-	}
-
+  /**
+   * Returns offset minY
+   *
+   * @return the minY
+   */
+  public double getMinY() {
+    return this.minY;
+  }
 }

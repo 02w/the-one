@@ -8,173 +8,162 @@ import core.Coord;
 import core.Settings;
 
 /**
- *
- * This movement model makes use of several other movement models to simulate
- * movement with daily routines. People wake up in the morning, go to work,
- * go shopping or similar activities in the evening and finally go home to
- * sleep.
+ * This movement model makes use of several other movement models to simulate movement with daily
+ * routines. People wake up in the morning, go to work, go shopping or similar activities in the
+ * evening and finally go home to sleep.
  *
  * @author Frans Ekman
  */
 public class WorkingDayMovement extends ExtendedMovementModel {
 
-	public static final String PROBABILITY_TO_OWN_CAR_SETTING = "ownCarProb";
-	public static final String PROBABILITY_TO_GO_SHOPPING_SETTING =
-		"probGoShoppingAfterWork";
+  public static final String PROBABILITY_TO_OWN_CAR_SETTING = "ownCarProb";
+  public static final String PROBABILITY_TO_GO_SHOPPING_SETTING = "probGoShoppingAfterWork";
+  private static final int BUS_TO_WORK_MODE = 0;
+  private static final int BUS_TO_HOME_MODE = 1;
+  private static final int BUS_TO_EVENING_ACTIVITY_MODE = 2;
+  private static final int WORK_MODE = 3;
+  private static final int HOME_MODE = 4;
+  private static final int EVENING_ACTIVITY_MODE = 5;
+  private final BusTravellerMovement busTravellerMM;
+  private final OfficeActivityMovement workerMM;
+  private final HomeActivityMovement homeMM;
+  private final EveningActivityMovement eveningActivityMovement;
+  private final CarMovement carMM;
+  private final TransportMovement movementUsedForTransfers;
+  private int mode;
 
-	private BusTravellerMovement busTravellerMM;
-	private OfficeActivityMovement workerMM;
-	private HomeActivityMovement homeMM;
-	private EveningActivityMovement eveningActivityMovement;
-	private CarMovement carMM;
+  private final double ownCarProb;
+  private final double doEveningActivityProb;
 
-	private TransportMovement movementUsedForTransfers;
+  /**
+   * Creates a new instance of WorkingDayMovement
+   *
+   * @param settings
+   */
+  public WorkingDayMovement(Settings settings) {
+    super(settings);
+    this.busTravellerMM = new BusTravellerMovement(settings);
+    this.workerMM = new OfficeActivityMovement(settings);
+    this.homeMM = new HomeActivityMovement(settings);
+    this.eveningActivityMovement = new EveningActivityMovement(settings);
+    this.carMM = new CarMovement(settings);
+    this.ownCarProb = settings.getDouble(WorkingDayMovement.PROBABILITY_TO_OWN_CAR_SETTING);
+    if (MovementModel.rng.nextDouble() < this.ownCarProb) {
+      this.movementUsedForTransfers = this.carMM;
+    } else {
+      this.movementUsedForTransfers = this.busTravellerMM;
+    }
+    this.doEveningActivityProb = settings.getDouble(
+        WorkingDayMovement.PROBABILITY_TO_GO_SHOPPING_SETTING);
 
-	private static final int BUS_TO_WORK_MODE = 0;
-	private static final int BUS_TO_HOME_MODE = 1;
-	private static final int BUS_TO_EVENING_ACTIVITY_MODE = 2;
+    this.setCurrentMovementModel(this.homeMM);
+    this.mode = WorkingDayMovement.HOME_MODE;
+  }
 
-	private static final int WORK_MODE = 3;
-	private static final int HOME_MODE = 4;
-	private static final int EVENING_ACTIVITY_MODE = 5;
+  /**
+   * Creates a new instance of WorkingDayMovement from a prototype
+   *
+   * @param proto
+   */
+  public WorkingDayMovement(WorkingDayMovement proto) {
+    super(proto);
+    this.busTravellerMM = new BusTravellerMovement(proto.busTravellerMM);
+    this.workerMM = new OfficeActivityMovement(proto.workerMM);
+    this.homeMM = new HomeActivityMovement(proto.homeMM);
+    this.eveningActivityMovement = new EveningActivityMovement(proto.eveningActivityMovement);
+    this.carMM = new CarMovement(proto.carMM);
 
-	private int mode;
+    this.ownCarProb = proto.ownCarProb;
+    if (MovementModel.rng.nextDouble() < this.ownCarProb) {
+      this.movementUsedForTransfers = this.carMM;
+    } else {
+      this.movementUsedForTransfers = this.busTravellerMM;
+    }
+    this.doEveningActivityProb = proto.doEveningActivityProb;
 
-	private double ownCarProb;
-	private double doEveningActivityProb;
+    this.setCurrentMovementModel(this.homeMM);
+    this.mode = proto.mode;
+  }
 
-	/**
-	 * Creates a new instance of WorkingDayMovement
-	 * @param settings
-	 */
-	public WorkingDayMovement(Settings settings) {
-		super(settings);
-		busTravellerMM = new BusTravellerMovement(settings);
-		workerMM = new OfficeActivityMovement(settings);
-		homeMM = new HomeActivityMovement(settings);
-		eveningActivityMovement = new EveningActivityMovement(settings);
-		carMM = new CarMovement(settings);
-		ownCarProb = settings.getDouble(PROBABILITY_TO_OWN_CAR_SETTING);
-		if (rng.nextDouble() < ownCarProb) {
-			movementUsedForTransfers = carMM;
-		} else {
-			movementUsedForTransfers = busTravellerMM;
-		}
-		doEveningActivityProb = settings.getDouble(
-				PROBABILITY_TO_GO_SHOPPING_SETTING);
+  @Override
+  public boolean newOrders() {
+    switch (this.mode) {
+      case WorkingDayMovement.WORK_MODE:
+        if (this.workerMM.isReady()) {
+          this.setCurrentMovementModel(this.movementUsedForTransfers);
+          if (this.doEveningActivityProb > MovementModel.rng.nextDouble()) {
+            this.movementUsedForTransfers.setNextRoute(
+                this.workerMM.getOfficeLocation(),
+                this.eveningActivityMovement.getShoppingLocationAndGetReady());
+            this.mode = WorkingDayMovement.BUS_TO_EVENING_ACTIVITY_MODE;
+          } else {
+            this.movementUsedForTransfers.setNextRoute(
+                this.workerMM.getOfficeLocation(), this.homeMM.getHomeLocation());
+            this.mode = WorkingDayMovement.BUS_TO_HOME_MODE;
+          }
+        }
+        break;
+      case WorkingDayMovement.HOME_MODE:
+        if (this.homeMM.isReady()) {
+          this.setCurrentMovementModel(this.movementUsedForTransfers);
+          this.movementUsedForTransfers.setNextRoute(
+              this.homeMM.getHomeLocation(), this.workerMM.getOfficeLocation());
+          this.mode = WorkingDayMovement.BUS_TO_WORK_MODE;
+        }
+        break;
+      case WorkingDayMovement.EVENING_ACTIVITY_MODE:
+        if (this.eveningActivityMovement.isReady()) {
+          this.setCurrentMovementModel(this.movementUsedForTransfers);
+          this.movementUsedForTransfers.setNextRoute(
+              this.eveningActivityMovement.getLastLocation(), this.homeMM.getHomeLocation());
+          this.mode = WorkingDayMovement.BUS_TO_HOME_MODE;
+        }
+        break;
+      case WorkingDayMovement.BUS_TO_WORK_MODE:
+        if (this.movementUsedForTransfers.isReady()) {
+          this.setCurrentMovementModel(this.workerMM);
+          this.mode = WorkingDayMovement.WORK_MODE;
+        }
+        break;
+      case WorkingDayMovement.BUS_TO_HOME_MODE:
+        if (this.movementUsedForTransfers.isReady()) {
+          this.setCurrentMovementModel(this.homeMM);
+          this.mode = WorkingDayMovement.HOME_MODE;
+        }
+        break;
+      case WorkingDayMovement.BUS_TO_EVENING_ACTIVITY_MODE:
+        if (this.movementUsedForTransfers.isReady()) {
+          this.setCurrentMovementModel(this.eveningActivityMovement);
+          this.mode = WorkingDayMovement.EVENING_ACTIVITY_MODE;
+        }
+        break;
+      default:
+        break;
+    }
+    return true;
+  }
 
-		setCurrentMovementModel(homeMM);
-		mode = HOME_MODE;
-	}
+  @Override
+  public Coord getInitialLocation() {
+    Coord homeLoc = this.homeMM.getHomeLocation().clone();
+    this.homeMM.setLocation(homeLoc);
+    return homeLoc;
+  }
 
-	/**
-	 * Creates a new instance of WorkingDayMovement from a prototype
-	 * @param proto
-	 */
-	public WorkingDayMovement(WorkingDayMovement proto) {
-		super(proto);
-		busTravellerMM = new BusTravellerMovement(proto.busTravellerMM);
-		workerMM = new OfficeActivityMovement(proto.workerMM);
-		homeMM = new HomeActivityMovement(proto.homeMM);
-		eveningActivityMovement = new EveningActivityMovement(
-				proto.eveningActivityMovement);
-		carMM = new CarMovement(proto.carMM);
+  @Override
+  public MovementModel replicate() {
+    return new WorkingDayMovement(this);
+  }
 
-		ownCarProb = proto.ownCarProb;
-		if (rng.nextDouble() < ownCarProb) {
-			movementUsedForTransfers = carMM;
-		} else {
-			movementUsedForTransfers = busTravellerMM;
-		}
-		doEveningActivityProb = proto.doEveningActivityProb;
+  public Coord getOfficeLocation() {
+    return this.workerMM.getOfficeLocation().clone();
+  }
 
-		setCurrentMovementModel(homeMM);
-		mode = proto.mode;
-	}
+  public Coord getHomeLocation() {
+    return this.homeMM.getHomeLocation().clone();
+  }
 
-	@Override
-	public boolean newOrders() {
-		switch (mode) {
-		case WORK_MODE:
-			if (workerMM.isReady()) {
-				setCurrentMovementModel(movementUsedForTransfers);
-				if (doEveningActivityProb > rng.nextDouble()) {
-					movementUsedForTransfers.setNextRoute(
-							workerMM.getOfficeLocation(),
-							eveningActivityMovement.
-								getShoppingLocationAndGetReady());
-					mode = BUS_TO_EVENING_ACTIVITY_MODE;
-				} else {
-					movementUsedForTransfers.setNextRoute(
-							workerMM.getOfficeLocation(),
-							homeMM.getHomeLocation());
-					mode = BUS_TO_HOME_MODE;
-				}
-			}
-			break;
-		case HOME_MODE:
-			if (homeMM.isReady()) {
-				setCurrentMovementModel(movementUsedForTransfers);
-				movementUsedForTransfers.setNextRoute(homeMM.getHomeLocation(),
-						workerMM.getOfficeLocation());
-				mode = BUS_TO_WORK_MODE;
-			}
-			break;
-		case EVENING_ACTIVITY_MODE:
-			if (eveningActivityMovement.isReady()) {
-				setCurrentMovementModel(movementUsedForTransfers);
-				movementUsedForTransfers.setNextRoute(eveningActivityMovement.
-						getLastLocation(), homeMM.getHomeLocation());
-				mode = BUS_TO_HOME_MODE;
-			}
-			break;
-		case BUS_TO_WORK_MODE:
-			if (movementUsedForTransfers.isReady()) {
-				setCurrentMovementModel(workerMM);
-				mode = WORK_MODE;
-			}
-			break;
-		case BUS_TO_HOME_MODE:
-			if (movementUsedForTransfers.isReady()) {
-				setCurrentMovementModel(homeMM);
-				mode = HOME_MODE;
-			}
-			break;
-		case BUS_TO_EVENING_ACTIVITY_MODE:
-			if (movementUsedForTransfers.isReady()) {
-				setCurrentMovementModel(eveningActivityMovement);
-				mode = EVENING_ACTIVITY_MODE;
-			}
-			break;
-		default:
-			break;
-		}
-		return true;
-	}
-
-	@Override
-	public Coord getInitialLocation() {
-		Coord homeLoc = homeMM.getHomeLocation().clone();
-		homeMM.setLocation(homeLoc);
-		return homeLoc;
-	}
-
-	@Override
-	public MovementModel replicate() {
-		return new WorkingDayMovement(this);
-	}
-
-
-	public Coord getOfficeLocation() {
-		return workerMM.getOfficeLocation().clone();
-	}
-
-	public Coord getHomeLocation() {
-		return homeMM.getHomeLocation().clone();
-	}
-
-	public Coord getShoppingLocation() {
-		return eveningActivityMovement.getShoppingLocation().clone();
-	}
-
+  public Coord getShoppingLocation() {
+    return this.eveningActivityMovement.getShoppingLocation().clone();
+  }
 }

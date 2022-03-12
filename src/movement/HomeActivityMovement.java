@@ -4,246 +4,239 @@
  */
 package movement;
 
-import input.WKTReader;
-
-import java.io.File;
-import java.util.LinkedList;
-import java.util.List;
-
-import movement.map.DijkstraPathFinder;
-import movement.map.MapNode;
-import movement.map.SimMap;
 import core.Coord;
 import core.Settings;
 import core.SimClock;
+import input.WKTReader;
+import java.io.File;
+import java.util.LinkedList;
+import java.util.List;
+import movement.map.DijkstraPathFinder;
+import movement.map.MapNode;
+import movement.map.SimMap;
 
 /**
- * A Class to model movement at home. If the node happens to be at some other
- * location than its home, it first walks the shortest path home location and
- * then stays there until morning. A node has only one home
+ * A Class to model movement at home. If the node happens to be at some other location than its
+ * home, it first walks the shortest path home location and then stays there until morning. A node
+ * has only one home
  *
  * @author Frans Ekman
  */
-public class HomeActivityMovement extends MapBasedMovement
-	implements SwitchableMovement {
+public class HomeActivityMovement extends MapBasedMovement implements SwitchableMovement {
 
-	private static final int WALKING_HOME_MODE = 0;
-	private static final int AT_HOME_MODE = 1;
-	private static final int READY_MODE = 2;
+  public static final String HOME_LOCATIONS_FILE_SETTING = "homeLocationsFile";
+  public static final String STD_FOR_TIME_DIFF_SETTING = "timeDiffSTD";
+  private static final int WALKING_HOME_MODE = 0;
+  private static final int AT_HOME_MODE = 1;
+  private static final int READY_MODE = 2;
+  private static final int DAY_LENGTH = 86000;
+  private int mode;
+  private final DijkstraPathFinder pathFinder;
 
-	private static final int DAY_LENGTH = 86000;
+  private final int distance;
 
-	public static final String HOME_LOCATIONS_FILE_SETTING = "homeLocationsFile";
+  private Coord lastWaypoint;
+  private Coord homeLocation;
 
-	public static final String STD_FOR_TIME_DIFF_SETTING = "timeDiffSTD";
+  private List<Coord> allHomes;
 
-	private int mode;
-	private DijkstraPathFinder pathFinder;
+  private final int timeDiffSTD;
+  private final int timeDifference;
 
-	private int distance;
+  /**
+   * Creates a new instance of HomeActivityMovement
+   *
+   * @param settings
+   */
+  public HomeActivityMovement(Settings settings) {
+    super(settings);
+    this.distance = 100;
+    this.pathFinder = new DijkstraPathFinder(null);
+    this.mode = HomeActivityMovement.WALKING_HOME_MODE;
 
-	private Coord lastWaypoint;
-	private Coord homeLocation;
+    String homeLocationsFile = null;
+    try {
+      homeLocationsFile = settings.getSetting(HomeActivityMovement.HOME_LOCATIONS_FILE_SETTING);
+    } catch (Throwable t) {
+      // Do nothing;
+    }
 
-	private List<Coord> allHomes;
+    this.timeDiffSTD = settings.getInt(HomeActivityMovement.STD_FOR_TIME_DIFF_SETTING);
 
-	private int timeDiffSTD;
-	private int timeDifference;
+    if (homeLocationsFile == null) {
+      MapNode[] mapNodes = this.getMap().getNodes().toArray(new MapNode[0]);
+      int homeIndex = MovementModel.rng.nextInt(mapNodes.length - 1);
+      this.homeLocation = mapNodes[homeIndex].getLocation().clone();
+    } else {
+      try {
+        this.allHomes = new LinkedList<>();
+        List<Coord> locationsRead = (new WKTReader()).readPoints(new File(homeLocationsFile));
+        for (Coord coord : locationsRead) {
+          SimMap map = this.getMap();
+          Coord offset = map.getOffset();
+          // mirror points if map data is mirrored
+          if (map.isMirrored()) {
+            coord.setLocation(coord.getX(), -coord.getY());
+          }
+          coord.translate(offset.getX(), offset.getY());
+          this.allHomes.add(coord);
+        }
+        this.homeLocation = this.allHomes.get(MovementModel.rng.nextInt(this.allHomes.size())).clone();
+      } catch (Exception e) {
+        e.printStackTrace();
+      }
+    }
 
-	/**
-	 * Creates a new instance of HomeActivityMovement
-	 * @param settings
-	 */
-	public HomeActivityMovement(Settings settings) {
-		super(settings);
-		distance = 100;
-		pathFinder = new DijkstraPathFinder(null);
-		mode = WALKING_HOME_MODE;
+    if (this.timeDiffSTD == -1) {
+      this.timeDifference = MovementModel.rng.nextInt(HomeActivityMovement.DAY_LENGTH) -
+          HomeActivityMovement.DAY_LENGTH / 2;
+    } else if (this.timeDiffSTD == 0) {
+      this.timeDifference = 0;
+    } else {
+      this.timeDifference =
+          (int)
+              Math.min(
+                  Math.max((
+                      MovementModel.rng.nextGaussian() * this.timeDiffSTD), -HomeActivityMovement.DAY_LENGTH
+                      / 2),
+                  HomeActivityMovement.DAY_LENGTH / 2);
+    }
+  }
 
-		String homeLocationsFile = null;
-		try {
-			homeLocationsFile = settings.getSetting(HOME_LOCATIONS_FILE_SETTING);
-		} catch (Throwable t) {
-			// Do nothing;
-		}
+  /**
+   * Creates a new instance of HomeActivityMovement from a prototype
+   *
+   * @param proto
+   */
+  public HomeActivityMovement(HomeActivityMovement proto) {
+    super(proto);
+    this.distance = proto.distance;
+    this.pathFinder = proto.pathFinder;
+    this.mode = proto.mode;
 
-		timeDiffSTD = settings.getInt(STD_FOR_TIME_DIFF_SETTING);
+    this.timeDiffSTD = proto.timeDiffSTD;
 
-		if (homeLocationsFile == null) {
-			MapNode[] mapNodes = (MapNode[])getMap().getNodes().
-				toArray(new MapNode[0]);
-			int homeIndex = rng.nextInt(mapNodes.length - 1);
-			homeLocation = mapNodes[homeIndex].getLocation().clone();
-		} else {
-			try {
-				allHomes = new LinkedList<Coord>();
-				List<Coord> locationsRead = (new WKTReader()).readPoints(
-						new File(homeLocationsFile));
-				for (Coord coord : locationsRead) {
-					SimMap map = getMap();
-					Coord offset = map.getOffset();
-					// mirror points if map data is mirrored
-					if (map.isMirrored()) {
-						coord.setLocation(coord.getX(), -coord.getY());
-					}
-					coord.translate(offset.getX(), offset.getY());
-					allHomes.add(coord);
-				}
-				homeLocation = allHomes.get(rng.nextInt(allHomes.size())).clone();
-			} catch (Exception e) {
-				e.printStackTrace();
-			}
-		}
+    if (proto.allHomes == null) {
+      MapNode[] mapNodes = this.getMap().getNodes().toArray(new MapNode[0]);
+      int homeIndex = MovementModel.rng.nextInt(mapNodes.length - 1);
+      this.homeLocation = mapNodes[homeIndex].getLocation().clone();
+    } else {
+      this.allHomes = proto.allHomes;
+      this.homeLocation = this.allHomes.get(MovementModel.rng.nextInt(this.allHomes.size())).clone();
+    }
 
-		if (timeDiffSTD == -1) {
-			timeDifference = rng.nextInt(DAY_LENGTH) - DAY_LENGTH/2;
-		} else if (timeDiffSTD == 0) {
-			timeDifference = 0;
-		} else {
-			timeDifference = (int)Math.min(
-									Math.max(
-											(rng.nextGaussian() * timeDiffSTD),
-											-DAY_LENGTH/2
-										),
-									DAY_LENGTH/2
-								);
-		}
-	}
+    if (this.timeDiffSTD == -1) {
+      this.timeDifference = MovementModel.rng.nextInt(HomeActivityMovement.DAY_LENGTH) -
+          HomeActivityMovement.DAY_LENGTH / 2;
+    } else if (this.timeDiffSTD == 0) {
+      this.timeDifference = 0;
+    } else {
+      this.timeDifference =
+          (int)
+              Math.min(
+                  Math.max((
+                      MovementModel.rng.nextGaussian() * this.timeDiffSTD), -HomeActivityMovement.DAY_LENGTH
+                      / 2),
+                  HomeActivityMovement.DAY_LENGTH / 2);
+    }
+  }
 
-	/**
-	 * Creates a new instance of HomeActivityMovement from a prototype
-	 * @param proto
-	 */
-	public HomeActivityMovement(HomeActivityMovement proto) {
-		super(proto);
-		this.distance = proto.distance;
-		this.pathFinder = proto.pathFinder;
-		this.mode = proto.mode;
+  @Override
+  public Coord getInitialLocation() {
+    double x = MovementModel.rng.nextDouble() * this.getMaxX();
+    double y = MovementModel.rng.nextDouble() * this.getMaxY();
+    Coord c = new Coord(x, y);
 
-		this.timeDiffSTD = proto.timeDiffSTD;
+    this.lastWaypoint = c;
+    return c.clone();
+  }
 
-		if (proto.allHomes == null) {
-			MapNode[] mapNodes = (MapNode[])getMap().getNodes().
-				toArray(new MapNode[0]);
-			int homeIndex = rng.nextInt(mapNodes.length - 1);
-			homeLocation = mapNodes[homeIndex].getLocation().clone();
-		} else {
-			this.allHomes = proto.allHomes;
-			homeLocation = allHomes.get(rng.nextInt(allHomes.size())).clone();
-		}
+  @Override
+  public Path getPath() {
+    if (this.mode == HomeActivityMovement.WALKING_HOME_MODE) {
+      // Try to find home
+      SimMap map = super.getMap();
+      if (map == null) {
+        return null;
+      }
+      MapNode thisNode = map.getNodeByCoord(this.lastWaypoint);
+      MapNode destinationNode = map.getNodeByCoord(this.homeLocation);
+      List<MapNode> nodes = this.pathFinder.getShortestPath(thisNode, destinationNode);
+      Path path = new Path(this.generateSpeed());
+      for (MapNode node : nodes) {
+        path.addWaypoint(node.getLocation());
+      }
+      this.lastWaypoint = this.homeLocation.clone();
+      this.mode = HomeActivityMovement.AT_HOME_MODE;
 
-		if (timeDiffSTD == -1) {
-			timeDifference = rng.nextInt(DAY_LENGTH) - DAY_LENGTH/2;
-		} else if (timeDiffSTD == 0) {
-			timeDifference = 0;
-		} else {
-			timeDifference = (int)Math.min(
-									Math.max(
-											(rng.nextGaussian() * timeDiffSTD),
-											-DAY_LENGTH/2
-										),
-									DAY_LENGTH/2
-								);
-		}
-	}
+      double newX = this.lastWaypoint.getX() + (MovementModel.rng.nextDouble() - 0.5) * this.distance;
+      if (newX > this.getMaxX()) {
+        newX = this.getMaxX();
+      } else if (newX < 0) {
+        newX = 0;
+      }
+      double newY = this.lastWaypoint.getY() + (MovementModel.rng.nextDouble() - 0.5) * this.distance;
+      if (newY > this.getMaxY()) {
+        newY = this.getMaxY();
+      } else if (newY < 0) {
+        newY = 0;
+      }
+      Coord c = new Coord(newX, newY);
+      path.addWaypoint(c);
+      return path;
+    } else {
+      Path path = new Path(1);
+      path.addWaypoint(this.lastWaypoint.clone());
+      this.mode = HomeActivityMovement.READY_MODE;
+      return path;
+    }
+  }
 
-	@Override
-	public Coord getInitialLocation() {
-		double x = rng.nextDouble() * getMaxX();
-		double y = rng.nextDouble() * getMaxY();
-		Coord c = new Coord(x,y);
+  @Override
+  protected double generateWaitTime() {
+    if (this.mode == HomeActivityMovement.AT_HOME_MODE) {
+      return HomeActivityMovement.DAY_LENGTH
+          - ((SimClock.getIntTime() + HomeActivityMovement.DAY_LENGTH
+          + this.timeDifference) % HomeActivityMovement.DAY_LENGTH);
+    } else {
+      return 0;
+    }
+  }
 
-		this.lastWaypoint = c;
-		return c.clone();
-	}
+  @Override
+  public MapBasedMovement replicate() {
+    return new HomeActivityMovement(this);
+  }
 
-	@Override
-	public Path getPath() {
-		if (mode == WALKING_HOME_MODE) {
-			// Try to find home
-			SimMap map = super.getMap();
-			if (map == null) {
-				return null;
-			}
-			MapNode thisNode = map.getNodeByCoord(lastWaypoint);
-			MapNode destinationNode = map.getNodeByCoord(homeLocation);
-			List<MapNode> nodes = pathFinder.getShortestPath(thisNode,
-					destinationNode);
-			Path path = new Path(generateSpeed());
-			for (MapNode node : nodes) {
-				path.addWaypoint(node.getLocation());
-			}
-			lastWaypoint = homeLocation.clone();
-			mode = AT_HOME_MODE;
+  /**
+   * @see SwitchableMovement
+   */
+  @Override
+  public Coord getLastLocation() {
+    return this.lastWaypoint.clone();
+  }
 
-			double newX = lastWaypoint.getX() + (rng.nextDouble() - 0.5) *
-				distance;
-			if (newX > getMaxX()) {
-				newX = getMaxX();
-			} else if (newX < 0) {
-				newX = 0;
-			}
-			double newY = lastWaypoint.getY() + (rng.nextDouble() - 0.5) *
-				distance;
-			if (newY > getMaxY()) {
-				newY = getMaxY();
-			} else if (newY < 0) {
-				newY = 0;
-			}
-			Coord c = new Coord(newX, newY);
-			path.addWaypoint(c);
-			return path;
-		} else {
-			Path path =  new Path(1);
-			path.addWaypoint(lastWaypoint.clone());
-			mode = READY_MODE;
-			return path;
-		}
+  /**
+   * @see SwitchableMovement
+   */
+  @Override
+  public boolean isReady() {
+    return this.mode == HomeActivityMovement.READY_MODE;
+  }
 
-	}
+  /**
+   * @see SwitchableMovement
+   */
+  @Override
+  public void setLocation(Coord lastWaypoint) {
+    this.lastWaypoint = lastWaypoint.clone();
+    this.mode = HomeActivityMovement.WALKING_HOME_MODE;
+  }
 
-	@Override
-	protected double generateWaitTime() {
-		if (mode == AT_HOME_MODE) {
-			return DAY_LENGTH - ((SimClock.getIntTime() + DAY_LENGTH +
-					timeDifference) % DAY_LENGTH);
-		} else {
-			return 0;
-		}
-	}
-
-	@Override
-	public MapBasedMovement replicate() {
-		return new HomeActivityMovement(this);
-	}
-
-	/**
-	 * @see SwitchableMovement
-	 */
-	public Coord getLastLocation() {
-		return lastWaypoint.clone();
-	}
-
-	/**
-	 * @see SwitchableMovement
-	 */
-	public boolean isReady() {
-		return mode == READY_MODE;
-	}
-
-	/**
-	 * @see SwitchableMovement
-	 */
-	public void setLocation(Coord lastWaypoint) {
-		this.lastWaypoint = lastWaypoint.clone();
-		mode = WALKING_HOME_MODE;
-	}
-
-	/**
-	 * @return Home location of the node
-	 */
-	public Coord getHomeLocation() {
-		return homeLocation.clone();
-	}
-
+  /**
+   * @return Home location of the node
+   */
+  public Coord getHomeLocation() {
+    return this.homeLocation.clone();
+  }
 }

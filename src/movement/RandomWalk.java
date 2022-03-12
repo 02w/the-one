@@ -14,82 +14,85 @@ import core.Settings;
  */
 public class RandomWalk extends MovementModel implements SwitchableMovement {
 
-	private Coord lastWaypoint;
-	private double minDistance;
-	private double maxDistance;
+  private Coord lastWaypoint;
+  private final double minDistance;
+  private final double maxDistance;
 
-	public RandomWalk(Settings settings) {
-		super(settings);
-		minDistance = 0;
-		maxDistance = 50;
-	}
+  public RandomWalk(Settings settings) {
+    super(settings);
+    this.minDistance = 0;
+    this.maxDistance = 50;
+  }
 
-	private RandomWalk(RandomWalk rwp) {
-		super(rwp);
-		minDistance = rwp.minDistance;
-		maxDistance = rwp.maxDistance;
-	}
+  private RandomWalk(RandomWalk rwp) {
+    super(rwp);
+    this.minDistance = rwp.minDistance;
+    this.maxDistance = rwp.maxDistance;
+  }
 
-	/**
-	 * Returns a possible (random) placement for a host
-	 * @return Random position on the map
-	 */
-	@Override
-	public Coord getInitialLocation() {
-		assert rng != null : "MovementModel not initialized!";
-		double x = rng.nextDouble() * getMaxX();
-		double y = rng.nextDouble() * getMaxY();
-		Coord c = new Coord(x,y);
+  /**
+   * Returns a possible (random) placement for a host
+   *
+   * @return Random position on the map
+   */
+  @Override
+  public Coord getInitialLocation() {
+    assert MovementModel.rng != null : "MovementModel not initialized!";
+    double x = MovementModel.rng.nextDouble() * this.getMaxX();
+    double y = MovementModel.rng.nextDouble() * this.getMaxY();
+    Coord c = new Coord(x, y);
 
-		this.lastWaypoint = c;
-		return c;
-	}
+    this.lastWaypoint = c;
+    return c;
+  }
 
-	@Override
-	public Path getPath() {
-		Path p;
-		p = new Path(generateSpeed());
-		p.addWaypoint(lastWaypoint.clone());
-		double maxX = getMaxX();
-		double maxY = getMaxY();
+  @Override
+  public Path getPath() {
+    Path p;
+    p = new Path(this.generateSpeed());
+    p.addWaypoint(this.lastWaypoint.clone());
+    double maxX = this.getMaxX();
+    double maxY = this.getMaxY();
 
-		Coord c = null;
-		while (true) {
+    Coord c = null;
+    while (true) {
 
-			double angle = rng.nextDouble() * 2 * Math.PI;
-			double distance = minDistance + rng.nextDouble() *
-				(maxDistance - minDistance);
+      double angle = MovementModel.rng.nextDouble() * 2 * Math.PI;
+      double distance = this.minDistance + MovementModel.rng.nextDouble() * (this.maxDistance - this.minDistance);
 
-			double x = lastWaypoint.getX() + distance * Math.cos(angle);
-			double y = lastWaypoint.getY() + distance * Math.sin(angle);
+      double x = this.lastWaypoint.getX() + distance * Math.cos(angle);
+      double y = this.lastWaypoint.getY() + distance * Math.sin(angle);
 
-			c = new Coord(x,y);
+      c = new Coord(x, y);
 
-			if (x > 0 && y > 0 && x < maxX && y < maxY) {
-				break;
-			}
-		}
+      if (x > 0 && y > 0 && x < maxX && y < maxY) {
+        break;
+      }
+    }
 
-		p.addWaypoint(c);
+    p.addWaypoint(c);
 
-		this.lastWaypoint = c;
-		return p;
-	}
+    this.lastWaypoint = c;
+    return p;
+  }
 
-	@Override
-	public RandomWalk replicate() {
-		return new RandomWalk(this);
-	}
+  @Override
+  public RandomWalk replicate() {
+    return new RandomWalk(this);
+  }
 
-	public Coord getLastLocation() {
-		return lastWaypoint;
-	}
+  @Override
+  public Coord getLastLocation() {
+    return this.lastWaypoint;
+  }
 
-	public void setLocation(Coord lastWaypoint) {
-		this.lastWaypoint = lastWaypoint;
-	}
+  @Override
+  public void setLocation(Coord lastWaypoint) {
+    this.lastWaypoint = lastWaypoint;
+  }
 
-	public boolean isReady() {
-		return true;
-	}
+  @Override
+  public boolean isReady() {
+    return true;
+  }
 }

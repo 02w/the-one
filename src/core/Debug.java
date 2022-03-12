@@ -7,109 +7,116 @@ package core;
 import java.io.PrintStream;
 
 /**
- * Debugging info printer with time stamping. This class is not to be actively
- * used but convenient for temporary debugging.
+ * Debugging info printer with time stamping. This class is not to be actively used but convenient
+ * for temporary debugging.
  */
 public class Debug {
-	private static PrintStream out = System.out;
-	private static int debugLevel = 0;
-	private static long timingStart = -1;
-	private static String timingCause;
+  private static PrintStream out = System.out;
+  private static int debugLevel = 0;
+  private static long timingStart = -1;
+  private static String timingCause;
 
-	/**
-	 * Sets the current debug level (smaller level -> more messages)
-	 * @param level The level to set
-	 */
-	public void setDebugLevel(int level) {
-		debugLevel = level;
-	}
+  /**
+   * Prints text to output with level 0
+   *
+   * @param txt text to print
+   */
+  public static void p(String txt) {
+    Debug.p(txt, 0, false);
+  }
 
-	/**
-	 * Sets print stream of debug output.
-	 * @param outStrm The stream
-	 */
-	public void setPrintStream(PrintStream outStrm) {
-		out = outStrm;
-	}
+  /**
+   * Prints text to output given with level
+   *
+   * @param level The debug level
+   * @param txt text to print
+   */
+  public static void p(String txt, int level) {
+    Debug.p(txt, level, false);
+  }
 
-	/**
-	 * Prints text to output with level 0
-	 * @param txt text to print
-	 */
-	public static void p(String txt) {
-		p(txt, 0, false);
-	}
+  /**
+   * Debug print with a timestamp
+   *
+   * @param txt Text to print
+   * @param level Debug level
+   */
+  public static void pt(String txt, int level) {
+    Debug.p(txt, level, true);
+  }
 
-	/**
-	 * Prints text to output given with level
-	 * @param level The debug level
-	 * @param txt text to print
-	 */
-	public static void p(String txt, int level) {
-		p(txt,level, false);
-	}
+  /**
+   * Debug print with a timestamp and 0 level
+   *
+   * @param txt Text to print
+   */
+  public static void pt(String txt) {
+    Debug.p(txt, 0, true);
+  }
 
+  /**
+   * Print text to debug output.
+   *
+   * @param txt The text to print
+   * @param level The debug level (only messages with level >= debugLevel are printed)
+   * @param timestamp If true, text is (sim)timestamped
+   */
+  public static void p(String txt, int level, boolean timestamp) {
+    String time = "";
+    int simTime = SimClock.getIntTime();
+    if (level < Debug.debugLevel) {
+      return;
+    }
 
-	/**
-	 * Debug print with a timestamp
-	 * @param txt Text to print
-	 * @param level Debug level
-	 */
-	public static void pt(String txt, int level) {
-		p(txt,level,true);
-	}
+    if (timestamp) {
+      time = "[@" + simTime + "]";
+    }
+    Debug.out.println("D" + time + ": " + txt);
+  }
 
-	/**
-	 * Debug print with a timestamp and 0 level
-	 * @param txt Text to print
-	 */
-	public static void pt(String txt) {
-		p(txt,0,true);
-	}
+  /**
+   * Start timing an action.
+   *
+   * @see #doneTiming()
+   */
+  public static void startTiming(String cause) {
+    if (Debug.timingStart != -1) {
+      Debug.doneTiming();
+    }
+    Debug.timingCause = cause;
+    Debug.timingStart = System.currentTimeMillis();
+  }
 
-	/**
-	 * Print text to debug output.
-	 * @param txt The text to print
-	 * @param level The debug level (only messages with level >= debugLevel
-	 * are printed)
-	 * @param timestamp If true, text is (sim)timestamped
-	 */
-	public static void p(String txt, int level, boolean timestamp) {
-		String time = "";
-		int simTime = SimClock.getIntTime();
-		if (level < debugLevel) {
-			return;
-		}
+  /**
+   * End timing an action. Information how long the action took is printed to debug stream.
+   *
+   * @see #startTiming(String)
+   */
+  public static void doneTiming() {
+    long end = System.currentTimeMillis();
+    long diff = end - Debug.timingStart;
+    if (end - Debug.timingStart > 0) {
+      Debug.pt(Debug.timingCause + " took " + diff / 1000.0 + "s");
+    }
 
-		if (timestamp) {
-			time = "[@"+simTime+"]";
-		}
-		out.println("D" + time + ": " + txt);
-	}
+    Debug.timingStart = -1;
+  }
 
-	/**
-	 * Start timing an action.
-	 * @see #doneTiming()
-	 */
-	public static void startTiming(String cause) {
-		if (timingStart != -1) {
-			doneTiming();
-		}
-		timingCause = cause;
-		timingStart = System.currentTimeMillis();
-	}
+  /**
+   * Sets the current debug level (smaller level -> more messages)
+   *
+   * @param level The level to set
+   */
+  public void setDebugLevel(int level) {
+    Debug.debugLevel = level;
+  }
 
-	/**
-	 * End timing an action. Information how long the action took is
-	 * printed to debug stream.
-	 * @see #startTiming(String)
-	 */
-	public static void doneTiming() {
-		long end = System.currentTimeMillis();
-		long diff = end-timingStart;
-		if (end-timingStart > 0)
-			pt(timingCause + " took "+ diff/1000.0 + "s" );
-
-		timingStart = -1;
-	}
+  /**
+   * Sets print stream of debug output.
+   *
+   * @param outStrm The stream
+   */
+  public void setPrintStream(PrintStream outStrm) {
+    Debug.out = outStrm;
+  }
 }

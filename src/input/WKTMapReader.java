@@ -4,6 +4,7 @@
  */
 package input;
 
+import core.Coord;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
@@ -12,148 +13,149 @@ import java.util.Collection;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
-
 import movement.map.MapNode;
 import movement.map.SimMap;
-import core.Coord;
 
 /**
- * "Well-known text syntax" map data reader.<BR>
- * <STRONG>Note</STRONG>: Understands only <CODE>LINESTRING</CODE>s and
- * <CODE>MULTILINESTRING</CODE>s. Skips all <CODE>POINT</CODE> data.
- * Other data causes IOException.
+ * "Well-known text syntax" map data reader.<br>
+ * <STRONG>Note</STRONG>: Understands only <CODE>LINESTRING</CODE>s and <CODE>MULTILINESTRING</CODE>
+ * s. Skips all <CODE>POINT</CODE> data. Other data causes IOException.
  */
 public class WKTMapReader extends WKTReader {
-	private Hashtable<Coord, MapNode> nodes;
-	/** are all paths bidirectional */
-	private boolean bidirectionalPaths = true;
-	private int nodeType = -1;
+  private final Hashtable<Coord, MapNode> nodes;
+  /** are all paths bidirectional */
+  private boolean bidirectionalPaths = true;
 
-	/**
-	 * Constructor. Creates a new WKT reader ready for addPaths() calls.
-	 * @param bidi If true, all read paths are set bidirectional (i.e. if node A
-	 * is a neighbor of node B, node B is also a neighbor of node A).
-	 */
-	public WKTMapReader(boolean bidi) {
-		this.bidirectionalPaths = bidi;
-		this.nodes = new Hashtable<Coord, MapNode>();
-	}
+  private int nodeType = -1;
 
-	/**
-	 * Sets bidirectional paths on/off.
-	 * @param bidi If true, all paths are set bidirectional (false -> not)
-	 */
-	public void setBidirectional(boolean bidi) {
-		this.bidirectionalPaths = bidi;
-	}
+  /**
+   * Constructor. Creates a new WKT reader ready for addPaths() calls.
+   *
+   * @param bidi If true, all read paths are set bidirectional (i.e. if node A is a neighbor of node
+   *     B, node B is also a neighbor of node A).
+   */
+  public WKTMapReader(boolean bidi) {
+    this.bidirectionalPaths = bidi;
+    this.nodes = new Hashtable<>();
+  }
 
-	/**
-	 * Returns the map nodes that were read in a collection
-	 * @return the map nodes that were read in a collection
-	 */
-	public Collection<MapNode> getNodes() {
-		return this.nodes.values();
-	}
+  /**
+   * Sets bidirectional paths on/off.
+   *
+   * @param bidi If true, all paths are set bidirectional (false -> not)
+   */
+  public void setBidirectional(boolean bidi) {
+    this.bidirectionalPaths = bidi;
+  }
 
-	/**
-	 * Returns the original Map object that was used to read the map
-	 * @return the original Map object that was used to read the map
-	 */
-	public Map<Coord, MapNode> getNodesHash() {
-		return this.nodes;
-	}
+  /**
+   * Returns the map nodes that were read in a collection
+   *
+   * @return the map nodes that were read in a collection
+   */
+  public Collection<MapNode> getNodes() {
+    return this.nodes.values();
+  }
 
-	/**
-	 * Returns new a SimMap that is based on the read map
-	 * @return new a SimMap that is based on the read map
-	 */
-	public SimMap getMap() {
-		return new SimMap(this.nodes);
-	}
+  /**
+   * Returns the original Map object that was used to read the map
+   *
+   * @return the original Map object that was used to read the map
+   */
+  public Map<Coord, MapNode> getNodesHash() {
+    return this.nodes;
+  }
 
-	/**
-	 * Adds paths to the map and adds given type to all nodes' type.
-	 * @param file The file where the WKT data is read from
-	 * @param type The type to use (integer value, see class {@link MapNode}))
-	 * @throws IOException If something went wrong while reading the file
-	 */
-	public void addPaths(File file, int type) throws IOException {
-		addPaths(new FileReader(file), type);
-	}
+  /**
+   * Returns new a SimMap that is based on the read map
+   *
+   * @return new a SimMap that is based on the read map
+   */
+  public SimMap getMap() {
+    return new SimMap(this.nodes);
+  }
 
+  /**
+   * Adds paths to the map and adds given type to all nodes' type.
+   *
+   * @param file The file where the WKT data is read from
+   * @param type The type to use (integer value, see class {@link MapNode}))
+   * @throws IOException If something went wrong while reading the file
+   */
+  public void addPaths(File file, int type) throws IOException {
+    this.addPaths(new FileReader(file), type);
+  }
 
-	/**
-	 * Add paths to current path set. Adding paths multiple times
-	 * has the same result as concatenating the data before adding it.
-	 * @param input Reader where the WKT data is read from
-	 * @param nodeType The type to use (integer value, see class
-	 * {@link MapNode}))
-	 * @throws IOException if something went wrong with reading from the input
-	 */
-	public void addPaths(Reader input, int nodeType) throws IOException {
-		this.nodeType = nodeType;
-		String type;
-		String contents;
+  /**
+   * Add paths to current path set. Adding paths multiple times has the same result as concatenating
+   * the data before adding it.
+   *
+   * @param input Reader where the WKT data is read from
+   * @param nodeType The type to use (integer value, see class {@link MapNode}))
+   * @throws IOException if something went wrong with reading from the input
+   */
+  public void addPaths(Reader input, int nodeType) throws IOException {
+    this.nodeType = nodeType;
+    String type;
+    String contents;
 
-		init(input);
+    this.init(input);
 
-		while((type = nextType()) != null) {
-			if (type.equals(LINESTRING)) {
-				contents = readNestedContents();
-				updateMap(parseLineString(contents));
-			}
-			else if (type.equals(MULTILINESTRING)) {
-				for (List<Coord> list : parseMultilinestring()) {
-					updateMap(list);
-				}
-			}
-			else {
-				// known type but not interesting -> skip
-				readNestedContents();
-			}
-		}
-	}
+    while ((type = this.nextType()) != null) {
+      if (type.equals(WKTReader.LINESTRING)) {
+        contents = this.readNestedContents();
+        this.updateMap(this.parseLineString(contents));
+      } else if (type.equals(WKTReader.MULTILINESTRING)) {
+        for (List<Coord> list : this.parseMultilinestring()) {
+          this.updateMap(list);
+        }
+      } else {
+        // known type but not interesting -> skip
+        this.readNestedContents();
+      }
+    }
+  }
 
-	/**
-	 * Updates simulation map with coordinates in the list
-	 * @param coords The list of coordinates
-	 */
-	private void updateMap(List<Coord> coords) {
-		MapNode previousNode = null;
-		for (Coord c : coords) {
-			previousNode = createOrUpdateNode(c, previousNode);
-		}
-	}
+  /**
+   * Updates simulation map with coordinates in the list
+   *
+   * @param coords The list of coordinates
+   */
+  private void updateMap(List<Coord> coords) {
+    MapNode previousNode = null;
+    for (Coord c : coords) {
+      previousNode = this.createOrUpdateNode(c, previousNode);
+    }
+  }
 
-	/**
-	 * Creates or updates a node that is in location c and next to
-	 * node previous
-	 * @param c The location coordinates of the node
-	 * @param previous Previous node whose neighbor node at c is
-	 * @return The created/updated node
-	 */
-	private MapNode createOrUpdateNode(Coord c, MapNode previous) {
-		MapNode n = null;
+  /**
+   * Creates or updates a node that is in location c and next to node previous
+   *
+   * @param c The location coordinates of the node
+   * @param previous Previous node whose neighbor node at c is
+   * @return The created/updated node
+   */
+  private MapNode createOrUpdateNode(Coord c, MapNode previous) {
+    MapNode n = null;
 
-		n = nodes.get(c);	// try to get the node at that location
+    n = this.nodes.get(c); // try to get the node at that location
 
-		if (n == null) { 	// no node in that location -> create new
-			n = new MapNode(c);
-			nodes.put(c, n);
-		}
+    if (n == null) { // no node in that location -> create new
+      n = new MapNode(c);
+      this.nodes.put(c, n);
+    }
 
-		if (previous != null) {
-			n.addNeighbor(previous);
-			if (bidirectionalPaths) {
-				previous.addNeighbor(n);
-			}
-		}
+    if (previous != null) {
+      n.addNeighbor(previous);
+      if (this.bidirectionalPaths) {
+        previous.addNeighbor(n);
+      }
+    }
 
-		if (nodeType != -1) {
-			n.addType(nodeType);
-		}
+    if (this.nodeType != -1) {
+      n.addType(this.nodeType);
+    }
 
-		return n;
-	}
-
+    return n;
+  }
 }
