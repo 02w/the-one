@@ -27,16 +27,6 @@ public class PassiveRouter extends MessageRouter {
   }
 
   @Override
-  public void update() {
-    super.update();
-  }
-
-  @Override
-  public void changedConnection(Connection con) {
-    // -"-
-  }
-
-  @Override
   public MessageRouter replicate() {
     return new PassiveRouter(this);
   }

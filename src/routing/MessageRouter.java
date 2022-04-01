@@ -179,6 +179,11 @@ public abstract class MessageRouter {
     this.blacklistedMessages = new HashMap<>();
     this.mListeners = mListeners;
     this.host = host;
+    for (Collection<Application> apps : this.applications.values()) {
+      for (Application app : apps) {
+        app.init(this.host);
+      }
+    }
   }
 
   /**
@@ -198,7 +203,13 @@ public abstract class MessageRouter {
    *
    * @param con The connection that changed
    */
-  public abstract void changedConnection(Connection con);
+  public void changedConnection(Connection con) {
+    for (Collection<Application> apps : this.applications.values()) {
+      for (Application app : apps) {
+        app.onChangedConnection(con, this.host);
+      }
+    }
+  }
 
   /**
    * Returns a message by ID.

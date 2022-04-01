@@ -4,6 +4,7 @@
  */
 package routing;
 
+import core.Application;
 import core.Connection;
 import core.DTNHost;
 import core.Message;
@@ -16,6 +17,8 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
+import java.util.stream.Collectors;
+
 import routing.util.EnergyModel;
 import routing.util.MessageTransferAcceptPolicy;
 import routing.util.RoutingInfo;
@@ -92,6 +95,7 @@ public abstract class ActiveRouter extends MessageRouter {
    */
   @Override
   public void changedConnection(Connection con) {
+    super.changedConnection(con);
     if (this.energy != null && con.isUp() && !con.isInitiator(this.getHost())) {
       this.energy.reduceDiscoveryEnergy();
     }
@@ -174,6 +178,23 @@ public abstract class ActiveRouter extends MessageRouter {
    */
   protected int startTransfer(Message m, Connection con) {
     int retVal;
+
+    Message tmp = m;
+    Collection<Application> apps = this.getApplications(m.getAppID());
+
+    for (Application app : apps) {
+      tmp = app.beforeSending(m, getHost(), con.getOtherNode(getHost()));
+      if (tmp == null) {
+        break;
+      }
+    }
+
+    if (tmp == null) {
+      return MessageRouter.DENIED_POLICY;
+    } else {
+      // the message might be changed by an application
+      m = tmp;
+    }
 
     if (!con.isReadyForTransfer()) {
       return MessageRouter.TRY_LATER_BUSY;
