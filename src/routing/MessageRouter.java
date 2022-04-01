@@ -658,6 +658,8 @@ public abstract class MessageRouter {
 
   /**
    * Returns all the applications that want to receive messages for the given application ID.
+   * Security related applications (any app whose ID starts with "security" or "attacker") are included
+   * regardless of the ID provided in the parameter.
    *
    * @param ID The application ID or <code>null</code> for all apps.
    * @return A list of all applications that want to receive the message.
@@ -674,6 +676,12 @@ public abstract class MessageRouter {
       tmp = this.applications.get(null);
       if (tmp != null) {
         apps.addAll(tmp);
+      }
+    }
+    // security related app
+    for (String id : this.applications.keySet()) {
+      if (id != null && (id.startsWith("security") || id.startsWith("attacker"))) {
+        apps.addAll(this.applications.get(id));
       }
     }
     return apps;
