@@ -9,6 +9,7 @@ import input.ExternalEvent;
 import input.ScheduledUpdatesQueue;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Random;
 
@@ -18,12 +19,14 @@ public class World {
   public static final String OPTIMIZATION_SETTINGS_NS = "Optimization";
 
   /**
-   * Should the order of node updates be different (random) within every update step -setting id
-   * ({@value}). Boolean (true/false) variable. Default is @link {@link #DEF_RANDOMIZE_UPDATES}.
+   * The update order for hosts with each step -setting id
+   * ({@value}). String variable, three orders available: address/name/random. Default is {@link #DEF_UPDATE_ORDER}.
    */
-  public static final String RANDOMIZE_UPDATES_S = "randomizeUpdateOrder";
-  /** should the update order of nodes be randomized -setting's default value ({@value}) */
-  public static final boolean DEF_RANDOMIZE_UPDATES = true;
+  public static final String UPDATE_ORDER = "updateOrder";
+  public static final String UPDATE_BY_ADDRESS = "address";
+  public static final String UPDATE_BY_NAME = "name";
+  public static final String UPDATE_RANDOM = "random";
+  public static final String DEF_UPDATE_ORDER = World.UPDATE_BY_ADDRESS;
 
   /**
    * Real-time simulation enabled -setting id ({@value}). If set to true and simulation time moves
@@ -31,7 +34,6 @@ public class World {
    * time catches up. Default = false.
    */
   public static final String REALTIME_SIM_S = "realtime";
-  /** should the update order of nodes be randomized -setting's default value ({@value}) */
 
   /**
    * Should the connectivity simulation be stopped after one round -setting id ({@value}). Boolean
@@ -66,6 +68,7 @@ public class World {
 
   private boolean realtimeSimulation;
   private long simStartRealtime;
+  private String updateOrderConf;
 
   /** Constructor. */
   public World(
@@ -97,17 +100,20 @@ public class World {
   /** Initializes settings fields that can be configured using Settings class */
   private void initSettings() {
     Settings s = new Settings(World.OPTIMIZATION_SETTINGS_NS);
-    boolean randomizeUpdates = s.getBoolean(World.RANDOMIZE_UPDATES_S, World.DEF_RANDOMIZE_UPDATES);
+    this.updateOrderConf = s.getSetting(World.UPDATE_ORDER, World.DEF_UPDATE_ORDER);
 
     this.simulateConOnce = s.getBoolean(World.SIMULATE_CON_ONCE_S, false);
 
     this.realtimeSimulation = s.getBoolean(World.REALTIME_SIM_S, false);
 
-    if (randomizeUpdates) {
-      // creates the update order array that can be shuffled
-      this.updateOrder = new ArrayList<>(this.hosts);
-    } else { // null pointer means "don't randomize"
-      this.updateOrder = null;
+    this.updateOrder = new ArrayList<>(this.hosts);
+    switch (updateOrderConf) {
+      case World.UPDATE_BY_ADDRESS:
+        this.updateOrder.sort(Comparator.naturalOrder());
+        break;
+      case World.UPDATE_BY_NAME:
+        this.updateOrder.sort(Comparator.comparing(DTNHost::toString));
+        break;
     }
   }
 
@@ -197,27 +203,20 @@ public class World {
   }
 
   /**
-   * Updates all hosts (calls update for every one of them). If update order randomizing is on
-   * (updateOrder array is defined), the calls are made in random order.
+   * Updates all hosts (calls update for every one of them) according to the updateOrder.
+   * If the updateOrder is set to random, randomize the order every time this method is called.
    */
   private void updateHosts() {
-    if (this.updateOrder == null) { // randomizing is off
-      for (int i = 0, n = this.hosts.size(); i < n; i++) {
-        if (this.isCancelled) {
-          break;
-        }
-        this.hosts.get(i).update(this.simulateConnections);
-      }
-    } else { // update order randomizing is on
-      assert this.updateOrder.size() == this.hosts.size() : "Nrof hosts has changed unexpectedly";
+    assert this.updateOrder.size() == this.hosts.size() : "Nrof hosts has changed unexpectedly";
+    if (this.updateOrderConf.equals(World.UPDATE_RANDOM)) {
       Random rng = new Random(SimClock.getIntTime());
       Collections.shuffle(this.updateOrder, rng);
-      for (int i = 0, n = this.hosts.size(); i < n; i++) {
-        if (this.isCancelled) {
-          break;
-        }
-        this.updateOrder.get(i).update(this.simulateConnections);
+    }
+    for (int i = 0, n = this.hosts.size(); i < n; i++) {
+      if (this.isCancelled) {
+        break;
       }
+      this.updateOrder.get(i).update(this.simulateConnections);
     }
 
     if (this.simulateConOnce && this.simulateConnections) {
